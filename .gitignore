@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# miaunifi runtime files: hold the device authkey and the controller's config
+# (Wi-Fi passphrases, device account passwords). Never commit these.
+miaunifi-state.json
+*.state.json
+system_cfg*.txt
+!tests/fixtures/system_cfg*.txt
+*.log
