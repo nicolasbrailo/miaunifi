@@ -10,8 +10,10 @@ import socket
 import time
 from urllib.parse import urlparse
 
-from . import device, packet
+from . import device, packet, unifi_cfg
 from .adopt import AdoptHelper
+from . import backends
+from .unifi_handler import UnifiCommandHandler
 
 log = logging.getLogger("miaunifi")
 
@@ -31,11 +33,17 @@ def load_state(path):
         return {}
 
 
-def save_state(path, state):
+def write_private(path, text):
+    """Atomically write an owner-only file: everything we persist may hold secrets."""
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(state, f, indent=2)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
     os.replace(tmp, path)
+
+
+def save_state(path, state):
+    write_private(path, json.dumps(state, indent=2))
 
 
 def random_mac():
@@ -45,34 +53,37 @@ def random_mac():
     return ":".join(f"{o:02x}" for o in octets)
 
 
-def parse_cfg(text):
-    """Parse the controller's key=value config blobs (mgmt_cfg, system_cfg)."""
-    cfg = {}
-    for line in text.splitlines():
-        k, sep, v = line.partition("=")
-        if sep:
-            cfg[k.strip()] = v.strip()
-    return cfg
+def redact_reply(reply):
+    """A controller reply with secrets masked, for logging."""
+    out = dict(reply)
+    for k in ("mgmt_cfg", "system_cfg"):
+        if k in out:
+            out[k] = unifi_cfg.redact(out[k])
+    return out
 
 
-def handle_setparam(reply, state, state_path):
-    """Apply a setparam reply. Returns True if state changed."""
-    if "mgmt_cfg" not in reply:
-        log.info("setparam without mgmt_cfg, ignoring keys: %s", sorted(reply))
-        return False
-    mgmt = parse_cfg(reply["mgmt_cfg"])
-    log.debug("mgmt_cfg: %s", mgmt)
-    changed = False
-    for src, dst in (("authkey", "authkey"), ("cfgversion", "cfgversion"),
-                     ("use_aes_gcm", "use_aes_gcm")):
-        if src in mgmt and state.get(dst) != mgmt[src]:
-            state[dst] = mgmt[src]
-            changed = True
-    if changed:
-        save_state(state_path, state)
-        log.info("adopted: got authkey, cfgversion=%s, gcm=%s",
-                 state.get("cfgversion"), state.get("use_aes_gcm"))
-    return changed
+def handle_setparam(reply, state, args, handler):
+    """Apply a setparam reply. The new cfgversion is only acknowledged once applied."""
+    mgmt = unifi_cfg.parse(reply.get("mgmt_cfg", ""))
+    for k in ("authkey", "use_aes_gcm"):
+        if k in mgmt:
+            state[k] = mgmt[k]
+    cfgversion = mgmt.get("cfgversion") or reply.get("cfgversion")
+
+    try:
+        handler.apply_mgmt(mgmt)
+        if "system_cfg" in reply:
+            write_private(args.system_cfg, reply["system_cfg"])
+            log.info("config %s from controller", cfgversion)
+            handler.apply_system_cfg(reply["system_cfg"])
+    except Exception:
+        log.exception("applying config %s failed; not acknowledging it", cfgversion)
+        cfgversion = None
+
+    if cfgversion:
+        state["cfgversion"] = cfgversion
+    save_state(args.state, state)
+    log.info("setparam: cfgversion=%s, gcm=%s", state.get("cfgversion"), state.get("use_aes_gcm"))
 
 
 def send_inform(url, mac, payload, key, gcm=False, source_ip=None):
@@ -101,6 +112,17 @@ def main():
     ap.add_argument("--once", action="store_true", help="send a single inform and exit")
     ap.add_argument("--adopt-helper", default="sudo -n /usr/local/bin/miaunifi-adopt",
                     help="command to run the adoption helper while pending; empty disables it")
+    ap.add_argument("--backend", choices=backends.NAMES, default="local",
+                    help="device that carries out the controller's commands")
+    ap.add_argument("--asus-host", default="$asus", help="SSH destination of the Asus router")
+    ap.add_argument("--asus-state", default="miaunifi-asus.state.json")
+    ap.add_argument("--system-cfg", default="system_cfg.txt",
+                    help="where to keep the last config from the controller (has secrets)")
+    ap.add_argument("--applied-state", default="miaunifi-applied.state.json",
+                    help="last config applied to the backend (has secrets)")
+    ap.add_argument("--resync", action="store_true",
+                    help="forget the applied config so the controller sends it again, "
+                         "and the backend gets every setting")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -111,6 +133,8 @@ def main():
     if args.mac:
         state["mac"] = args.mac.lower()
     state.setdefault("mac", random_mac())
+    if args.resync:
+        state.pop("cfgversion", None)
     save_state(args.state, state)
 
     mac = state["mac"]
@@ -118,6 +142,11 @@ def main():
     host_ip = local_ip_for(urlparse(url).hostname)
     log.info("device %s (%s) at %s -> %s (%s)", mac, device.MODEL, host_ip, url,
              "adopted" if "authkey" in state else "not adopted")
+
+    handler = UnifiCommandHandler(backends.make(args.backend, args), args.applied_state)
+    if args.resync:
+        handler.forget()
+    log.info("backend: %s", args.backend)
 
     helper = None
     if args.adopt_helper and not args.once:
@@ -154,13 +183,13 @@ def main():
                     reply = json.loads(data)
                     rtype = reply.get("_type")
                     log.info("reply %s (flags=%#x)", rtype, flags)
-                    log.debug("reply: %s", json.dumps(reply))
+                    log.debug("reply: %s", json.dumps(redact_reply(reply)))
                     if rtype == "noop" and "interval" in reply:
                         interval = int(reply["interval"])
                     elif rtype == "setparam":
-                        handle_setparam(reply, state, args.state)
+                        handle_setparam(reply, state, args, handler)
                     else:
-                        log.info("unhandled reply: %s", json.dumps(reply))
+                        handler.handle_command(redact_reply(reply))
                     if helper and helper.running() and "authkey" in state:
                         helper.stop()
                         device_ip = None

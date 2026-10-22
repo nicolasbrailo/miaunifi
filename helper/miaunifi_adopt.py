@@ -108,7 +108,9 @@ class MacvlanIdentity:
     def down(self):
         if self.dhcp is not None and self.dhcp.poll() is None:
             try:
-                run("dhcpcd", "-k", self.ifname)  # release the lease; the daemon then exits
+                # Release the lease; the daemon then exits. Needs the same -4 it
+                # was started with, or dhcpcd looks for a different instance.
+                run("dhcpcd", "-4", "-k", self.ifname)
                 self.dhcp.wait(5)
             except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
                 log.warning("dhcpcd release failed (%s), killing it", e)
@@ -171,8 +173,9 @@ class FakeDevice(paramiko.ServerInterface):
 
 def respond(cmd):
     """Output for a command the controller runs. Nothing is ever executed."""
-    emit("ssh_cmd", cmd=cmd)
     m = SET_ADOPT_RE.search(cmd)
+    # The main service logs ssh_cmd: keep the authkey out of it
+    emit("ssh_cmd", cmd=SET_ADOPT_RE.sub(r"set-adopt \1 <authkey>", cmd))
     if m:
         emit("adopted", url=m.group(1), authkey=m.group(2).lower())
     return ""
