@@ -60,6 +60,8 @@ class UnifiCommandHandler:
         self.backend = backend
         self.state_path = state_path
         self.applied = self._load()
+        if self.applied["config"] is not None:
+            backend.restore(self.applied["config"])
 
     # --- persistence: what we last applied (holds passphrases) -----------
 

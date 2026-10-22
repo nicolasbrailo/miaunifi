@@ -13,7 +13,15 @@ VERSION = "6.6.55.15189"
 _BOOT = time.time()
 
 
-def inform_payload(mac, ip, hostname, inform_url, cfgversion=None, netmask="255.255.255.0"):
+def inform_payload(mac, ip, hostname, inform_url, cfgversion=None, netmask="255.255.255.0",
+                   report=None):
+    """report: state fields from unifi_report (vap_table, sys_stats, ...); they win."""
+    payload = _base_payload(mac, ip, hostname, inform_url, cfgversion, netmask)
+    payload.update(report or {})
+    return payload
+
+
+def _base_payload(mac, ip, hostname, inform_url, cfgversion, netmask):
     uptime = int(time.time() - _BOOT)
     return {
         "mac": mac,
@@ -60,5 +68,4 @@ def inform_payload(mac, ip, hostname, inform_url, cfgversion=None, netmask="255.
              "is_11ac": True, "has_dfs": True},
         ],
         "vap_table": [],
-        "sta_table": [],
     }

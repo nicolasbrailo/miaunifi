@@ -76,11 +76,19 @@ class TestHandler(unittest.TestCase):
         self.assertEqual(os.stat(self.path).st_mode & 0o777, 0o600)
         self.calls()
         handler = UnifiCommandHandler(self.backend, self.path)
+        self.assertEqual(self.calls(), ["restore"])
         handler.apply_system_cfg(fixture_text())
         self.assertEqual(self.calls(), [])
         handler.forget()
         handler.apply_system_cfg(fixture_text())
         self.assertIn("add_wlan", self.calls())
+
+    def test_restart_restores_backend_view(self):
+        self.handler.apply_system_cfg(fixture_text())
+        backend = mock.create_autospec(MiaunifiCommand, instance=True)
+        UnifiCommandHandler(backend, self.path)
+        [cfg] = backend.restore.call_args.args
+        self.assertEqual([w.ssid for w in cfg.wlans], ["SSID_1"])
 
     def test_removed_wlan(self):
         self.handler.apply_system_cfg(fixture_text())

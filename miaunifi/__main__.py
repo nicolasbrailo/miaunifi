@@ -14,6 +14,7 @@ from . import device, packet, unifi_cfg
 from .adopt import AdoptHelper
 from . import backends
 from .unifi_handler import UnifiCommandHandler
+from .unifi_report import Reporter
 
 log = logging.getLogger("miaunifi")
 
@@ -118,6 +119,8 @@ def main():
     ap.add_argument("--asus-state", default="miaunifi-asus.state.json")
     ap.add_argument("--system-cfg", default="system_cfg.txt",
                     help="where to keep the last config from the controller (has secrets)")
+    ap.add_argument("--fake-clients", type=int, default=0,
+                    help="local backend: report this many made-up Wi-Fi clients")
     ap.add_argument("--applied-state", default="miaunifi-applied.state.json",
                     help="last config applied to the backend (has secrets)")
     ap.add_argument("--resync", action="store_true",
@@ -144,6 +147,7 @@ def main():
              "adopted" if "authkey" in state else "not adopted")
 
     handler = UnifiCommandHandler(backends.make(args.backend, args), args.applied_state)
+    reporter = Reporter(handler.backend)
     if args.resync:
         handler.forget()
     log.info("backend: %s", args.backend)
@@ -162,7 +166,7 @@ def main():
             key = bytes.fromhex(state["authkey"]) if "authkey" in state else packet.DEFAULT_KEY
             gcm = state.get("use_aes_gcm") == "true"
             payload = device.inform_payload(mac, device_ip or host_ip, args.hostname, url,
-                                            state.get("cfgversion"))
+                                            state.get("cfgversion"), report=reporter.poll())
             log.debug("inform: %s", json.dumps(payload))
             try:
                 status, body = send_inform(url, mac, payload, key, gcm, device_ip)

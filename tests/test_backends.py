@@ -22,6 +22,38 @@ class TestLocal(unittest.TestCase):
         self.assertFalse(any("hunter2" in line for line in logs.output))
 
 
+class TestLocalState(unittest.TestCase):
+    def test_commands_change_reported_state(self):
+        b = LocalBackend(fake_clients=4)
+        b.set_radio_enabled("2g", True)
+        b.set_radio_enabled("5g", True)
+        b.set_channel("5g", "44")
+        b.add_wlan(wlan())
+        self.assertEqual([(v.band, v.ssid) for v in b.get_vaps()], [("2g", "Home"), ("5g", "Home")])
+        self.assertEqual({r.band: r.channel for r in b.get_radios()}, {"2g": 6, "5g": 44})
+        clients = b.get_clients()
+        self.assertEqual(len(clients), 4)
+        self.assertEqual(len({c.mac for c in clients}), 4)
+        b.set_ssid(wlan(), "Renamed")
+        b.set_wlan_bands(wlan(), ["5g"])
+        self.assertEqual([(v.band, v.ssid) for v in b.get_vaps()], [("5g", "Renamed")])
+        b.remove_wlan(wlan())
+        self.assertEqual((b.get_vaps(), b.get_clients()), ([], []))
+
+    def test_restore_does_not_alias(self):
+        cfg = model.DeviceConfig(radios=[model.Radio(band="2g")], wlans=[wlan(bands=["2g"])])
+        b = LocalBackend()
+        b.restore(cfg)
+        b.set_ssid(cfg.wlans[0], "Changed")
+        self.assertEqual(cfg.wlans[0].ssid, "Home")
+        self.assertEqual(b.get_vaps()[0].ssid, "Changed")
+
+    def test_system(self):
+        s = LocalBackend().get_system()
+        self.assertGreaterEqual(s.uptime_s, 0)
+        self.assertEqual(len(s.load), 3)
+
+
 class TestAsus(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
@@ -95,6 +127,13 @@ class TestAsus(unittest.TestCase):
     def test_upgrade_refused(self):
         out = self.ssh(self.b.upgrade, "http://x/fw.bin", "9.9")
         self.assertIn("refusing", out[0])
+
+    def test_state_not_implemented_warns_once(self):
+        with self.assertLogs("miaunifi.backend.asus") as logs:
+            self.assertEqual(self.b.get_clients(), [])
+            self.assertEqual(self.b.get_clients(), [])
+            self.assertIsNone(self.b.get_system())
+        self.assertEqual(len(logs.output), 2)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
-"""Everything the UniFi controller can ask a device to do.
+"""Everything the UniFi controller can ask a device to do, and everything it
+wants to know about it.
 
 The UniFi handler (unifi_handler.py) turns controller messages into calls on
 a MiaunifiCommand; each backend (backends/*) implements them for one kind of
@@ -6,6 +7,9 @@ device. Backends never see UniFi's message formats.
 
 WLAN methods get the full model.Wlan (with its controller `id`) so backends
 can find where that WLAN lives on the device, plus the new value.
+
+The get_* methods are polled before every inform (unifi_report.py) and
+return model.*State objects.
 """
 
 from abc import ABC, abstractmethod
@@ -115,3 +119,25 @@ class MiaunifiCommand(ABC):
     @abstractmethod
     def commit(self):
         """Called after a batch of changes: make them take effect."""
+
+    def restore(self, config):
+        """At startup: the device already has this config (model.DeviceConfig)
+        from a previous run. Update any internal view; don't touch the device."""
+
+    # --- state, polled before each inform ----------------------------------
+
+    @abstractmethod
+    def get_radios(self):
+        """list[model.RadioState]"""
+
+    @abstractmethod
+    def get_vaps(self):
+        """list[model.VapState]: every WLAN on every band it's up on."""
+
+    @abstractmethod
+    def get_clients(self):
+        """list[model.ClientState]: connected Wi-Fi clients."""
+
+    @abstractmethod
+    def get_system(self):
+        """model.SystemState, or None if unknown."""

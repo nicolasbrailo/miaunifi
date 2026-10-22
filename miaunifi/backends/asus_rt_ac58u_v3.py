@@ -50,6 +50,7 @@ class AsusRtAc58uV3(MiaunifiCommand):
         self.state_path = state_path
         self.slots = self._load()  # wlan id -> slot (0 main, 1-3 guest)
         self.restart = set()       # services to restart on commit
+        self._warned = set()
 
     # --- plumbing ----------------------------------------------------------
 
@@ -259,3 +260,31 @@ class AsusRtAc58uV3(MiaunifiCommand):
         for service in sorted(self.restart):
             self._ssh(f"service restart_{service}")
         self.restart.clear()
+
+    # --- state ---------------------------------------------------------------
+    # Needs real SSH: reading state can't be print-only. Planned sources:
+    #   radios:  wl -i <ifname> status / noise / txpwr1
+    #   vaps:    nvram wlN[.M]_ssid, _bss_enabled; wl -i <ifname> bssid
+    #   clients: wl -i <ifname> assoclist + sta_info <mac>; arp -an for IPs
+    #   system:  /proc/uptime, /proc/loadavg, /proc/meminfo
+
+    def _not_yet(self, what):
+        if what not in self._warned:
+            log.warning("asus: %s not implemented yet (needs real SSH), reporting nothing", what)
+            self._warned.add(what)
+
+    def get_radios(self):
+        self._not_yet("get_radios")
+        return []
+
+    def get_vaps(self):
+        self._not_yet("get_vaps")
+        return []
+
+    def get_clients(self):
+        self._not_yet("get_clients")
+        return []
+
+    def get_system(self):
+        self._not_yet("get_system")
+        return None

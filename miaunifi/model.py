@@ -46,6 +46,66 @@ class Wlan:
     vlan: int | None = None
 
 
+# --- state: what the device is doing, reported back to the controller -------
+
+@dataclass
+class RadioState:
+    band: str
+    channel: int | None = None  # operating channel (the real one, also when set to auto)
+    width_mhz: int | None = None
+    txpower_dbm: int | None = None
+    min_txpower_dbm: int | None = None
+    max_txpower_dbm: int | None = None
+    nss: int | None = None       # spatial streams
+
+
+@dataclass
+class VapState:
+    """One WLAN on one band."""
+    wlan_id: str
+    band: str
+    ssid: str
+    bssid: str
+    up: bool = True
+    guest: bool = False
+    # None: backend doesn't know; the report sums its clients instead
+    rx_bytes: int | None = None
+    tx_bytes: int | None = None
+    rx_packets: int | None = None
+    tx_packets: int | None = None
+
+
+@dataclass
+class ClientState:
+    mac: str
+    wlan_id: str
+    band: str
+    signal_dbm: int | None = None
+    noise_dbm: int | None = None
+    tx_rate_kbps: int | None = None
+    rx_rate_kbps: int | None = None
+    tx_bytes: int = 0
+    rx_bytes: int = 0
+    tx_packets: int = 0
+    rx_packets: int = 0
+    uptime_s: int = 0
+    idle_s: int = 0
+    phy: str | None = None       # n, ac, ax
+    nss: int | None = None
+    ip: str | None = None
+    hostname: str | None = None
+    vlan: int | None = None
+
+
+@dataclass
+class SystemState:
+    uptime_s: int
+    load: tuple[float, float, float] | None = None  # 1, 5, 15 minutes
+    mem_total: int | None = None  # bytes
+    mem_used: int | None = None
+    cpu_pct: float | None = None
+
+
 @dataclass
 class DeviceConfig:
     country: str | None = None  # ISO 3166 alpha-2
