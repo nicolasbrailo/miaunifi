@@ -92,6 +92,15 @@ class TestAsus(unittest.TestCase):
         self.assertEqual(out, ["ssh $asus nvram set wl0.1_ssid='Visitors'",
                                "ssh $asus nvram set wl1.1_ssid='Visitors'"])
 
+    def test_readding_keeps_slots(self):
+        # --resync, or a retry after a failed apply, adds every WLAN again
+        self.ssh(self.b.add_wlan, wlan())
+        self.ssh(self.b.add_wlan, wlan(id="w2", ssid="Guests"))
+        self.ssh(self.b.add_wlan, wlan())
+        out = self.ssh(self.b.add_wlan, wlan(id="w2", ssid="Guests"))
+        self.assertEqual(self.b.slots, {"w1": 0, "w2": 1})
+        self.assertIn("ssh $asus nvram set wl0.1_ssid='Guests'", out)
+
     def test_commit_restarts_once(self):
         self.ssh(self.b.add_wlan, wlan())
         self.assertEqual(self.ssh(self.b.commit),

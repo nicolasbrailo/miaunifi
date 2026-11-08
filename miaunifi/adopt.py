@@ -10,6 +10,7 @@ import json
 import logging
 import queue
 import shlex
+import socket
 import subprocess
 import threading
 import time
@@ -21,7 +22,9 @@ RESTART_DELAY = 60
 
 class AdoptHelper:
     def __init__(self, cmd, mac, controller):
-        self.argv = shlex.split(cmd) + ["--mac", mac, "--controller", controller]
+        self.cmd = shlex.split(cmd)
+        self.mac = mac
+        self.controller = controller
         self.proc = None
         self.events = queue.Queue()
         self.last_start = None
@@ -36,10 +39,17 @@ class AdoptHelper:
         if self.last_start is not None and time.monotonic() - self.last_start < RESTART_DELAY:
             return
         self.last_start = time.monotonic()
-        log.info("starting adoption helper: %s", " ".join(self.argv))
+        try:
+            # The inform URL may name the controller; the helper wants its IPv4
+            controller = socket.gethostbyname(self.controller)
+        except OSError as e:
+            log.error("can't resolve controller %r for the adoption helper: %s", self.controller, e)
+            return
+        argv = self.cmd + ["--mac", self.mac, "--controller", controller]
+        log.info("starting adoption helper: %s", " ".join(argv))
         try:
             # stderr is inherited so the helper's logs show up next to ours
-            self.proc = subprocess.Popen(self.argv, stdin=subprocess.PIPE,
+            self.proc = subprocess.Popen(argv, stdin=subprocess.PIPE,
                                          stdout=subprocess.PIPE, text=True)
         except OSError as e:
             log.error("can't start adoption helper: %s", e)

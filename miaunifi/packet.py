@@ -19,6 +19,7 @@ import os
 import struct
 import zlib
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -78,17 +79,23 @@ def decode(packet, key=DEFAULT_KEY):
         raise PacketError(f"truncated payload ({len(data)}/{data_len} bytes)")
 
     if flags & FLAG_ENCRYPTED:
-        if flags & FLAG_GCM:
-            data = AESGCM(key).decrypt(iv, data, header)
-        else:
-            dec = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
-            data = dec.update(data) + dec.finalize()
-            unpadder = padding.PKCS7(128).unpadder()
-            data = unpadder.update(data) + unpadder.finalize()
+        try:
+            if flags & FLAG_GCM:
+                data = AESGCM(key).decrypt(iv, data, header)
+            else:
+                dec = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+                data = dec.update(data) + dec.finalize()
+                unpadder = padding.PKCS7(128).unpadder()
+                data = unpadder.update(data) + unpadder.finalize()
+        except (InvalidTag, ValueError) as e:
+            raise PacketError(f"can't decrypt (wrong key?): {e!r}") from e
 
     if flags & FLAG_SNAPPY:
         raise PacketError("snappy compression not supported")
     if flags & FLAG_ZLIB:
-        data = zlib.decompress(data)
+        try:
+            data = zlib.decompress(data)
+        except zlib.error as e:
+            raise PacketError(f"can't decompress: {e}") from e
 
     return bytes_to_mac(mac), flags, data

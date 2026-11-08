@@ -4,7 +4,9 @@ The UniFi controller adopts a device by SSHing into it (any credentials, it
 tries ubnt/ubnt first) and running `syswrapper.sh set-adopt <url> <authkey>`.
 This helper:
 
-  1. creates a macvlan interface with the device's MAC and gets an IP via DHCP,
+  1. creates a macvlan interface with the device's MAC and gets an IP via DHCP
+     (on the interface towards the controller, or the default route's when the
+     controller runs on this host; --parent overrides),
   2. runs a fake SSH server on that IP: it accepts any login, executes nothing,
      logs every command and captures the authkey from set-adopt,
   3. tears the interface down when stdin closes or on SIGTERM.
@@ -55,18 +57,36 @@ def run(*cmd):
 
 # --- network identity -------------------------------------------------------
 
+def parent_interface(controller):
+    """Where the device's macvlan goes: the interface towards the controller.
+    When the controller is this host that route is via lo, which can't carry a
+    macvlan; the device then joins the LAN on the default route's interface,
+    and the controller reaches it as one of this host's own addresses."""
+    route = json.loads(run("ip", "-j", "route", "get", controller))[0]
+    if route.get("type") != "local" and route["dev"] != "lo":
+        return route["dev"]
+    defaults = json.loads(run("ip", "-j", "-4", "route", "show", "default"))
+    if not defaults:
+        raise RuntimeError(f"controller {controller} is this host and there is no default "
+                           f"route to pick an interface from; pass --parent")
+    dev = min(defaults, key=lambda r: r.get("metric", 0))["dev"]
+    log.info("controller %s is this host, using the default route's %s", controller, dev)
+    return dev
+
+
 class MacvlanIdentity:
     """A macvlan interface with the device's MAC, configured via DHCP."""
 
-    def __init__(self, ifname, mac, controller):
+    def __init__(self, ifname, mac, controller, parent=None):
         self.ifname = ifname
         self.mac = mac
         self.controller = controller
+        self.parent = parent
         self.created = False
         self.dhcp = None
 
     def up(self, timeout=30):
-        parent = json.loads(run("ip", "-j", "route", "get", self.controller))[0]["dev"]
+        parent = self.parent or parent_interface(self.controller)
         log.info("creating %s on %s with MAC %s", self.ifname, parent, self.mac)
         run("ip", "link", "add", self.ifname, "link", parent, "address", self.mac,
             "type", "macvlan", "mode", "bridge")
@@ -257,6 +277,7 @@ def parse_args():
     ap.add_argument("--mac", required=True)
     ap.add_argument("--controller", required=True, help="controller IPv4 address")
     ap.add_argument("--ifname", default="miau0")
+    ap.add_argument("--parent", help="interface to put the macvlan on (default: towards the controller)")
     ap.add_argument("--port", type=int, default=22)
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
@@ -271,6 +292,8 @@ def parse_args():
         ap.error("--controller must be an IPv4 address")
     if not re.fullmatch(r"[a-z][a-z0-9]{0,14}", args.ifname):
         ap.error("bad --ifname")
+    if args.parent is not None and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,14}", args.parent):
+        ap.error("bad --parent")
     if not 1 <= args.port <= 65535:
         ap.error("bad --port")
     return args
@@ -294,7 +317,7 @@ def main():
         stop.set()
     threading.Thread(target=watch_stdin, daemon=True).start()
 
-    identity = MacvlanIdentity(args.ifname, args.mac, args.controller)
+    identity = MacvlanIdentity(args.ifname, args.mac, args.controller, args.parent)
     try:
         host_key = load_host_key(STATE_DIR)
         ip = identity.up()

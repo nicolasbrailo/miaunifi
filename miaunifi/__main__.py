@@ -87,6 +87,24 @@ def handle_setparam(reply, state, args, handler):
     log.info("setparam: cfgversion=%s, gcm=%s", state.get("cfgversion"), state.get("use_aes_gcm"))
 
 
+def reported_version(state):
+    """Firmware version we claim: the newest of ours and any the controller pushed."""
+    v = state.get("version")
+    return v if device.newer_version(v, device.VERSION) else device.VERSION
+
+
+def handle_upgrade(reply, state, args):
+    """We never flash anything, but claim the version the controller asked for:
+    it then sees an up-to-date device and stops offering upgrades."""
+    version = reply.get("version")
+    if not device.newer_version(version, reported_version(state)):
+        log.info("upgrade to %s: not newer than what we report, ignoring", version)
+        return
+    log.info("upgrade to %s: reporting it from now on (nothing is flashed)", version)
+    state["version"] = version
+    save_state(args.state, state)
+
+
 def send_inform(url, mac, payload, key, gcm=False, source_ip=None):
     u = urlparse(url)
     body = packet.encode(mac, json.dumps(payload).encode(), key, gcm)
@@ -143,7 +161,8 @@ def main():
     mac = state["mac"]
     url = state.get("inform_url", args.inform_url)
     host_ip = local_ip_for(urlparse(url).hostname)
-    log.info("device %s (%s) at %s -> %s (%s)", mac, device.MODEL, host_ip, url,
+    log.info("device %s (%s %s) at %s -> %s (%s)", mac, device.MODEL,
+             reported_version(state), host_ip, url,
              "adopted" if "authkey" in state else "not adopted")
 
     handler = UnifiCommandHandler(backends.make(args.backend, args), args.applied_state)
@@ -166,7 +185,8 @@ def main():
             key = bytes.fromhex(state["authkey"]) if "authkey" in state else packet.DEFAULT_KEY
             gcm = state.get("use_aes_gcm") == "true"
             payload = device.inform_payload(mac, device_ip or host_ip, args.hostname, url,
-                                            state.get("cfgversion"), report=reporter.poll())
+                                            state.get("cfgversion"), report=reporter.poll(),
+                                            version=reported_version(state))
             log.debug("inform: %s", json.dumps(payload))
             try:
                 status, body = send_inform(url, mac, payload, key, gcm, device_ip)
@@ -193,12 +213,20 @@ def main():
                     elif rtype == "setparam":
                         handle_setparam(reply, state, args, handler)
                     else:
-                        handler.handle_command(redact_reply(reply))
+                        if rtype == "upgrade":
+                            handle_upgrade(reply, state, args)
+                        try:
+                            handler.handle_command(redact_reply(reply))
+                        except Exception:
+                            log.exception("handling %s failed", rtype)
                     if helper and helper.running() and "authkey" in state:
                         helper.stop()
                         device_ip = None
             except (OSError, packet.PacketError, ValueError) as e:
                 log.error("inform failed: %s", e)
+            except Exception:
+                # Unexpected: keep the device alive, the next inform may work
+                log.exception("inform failed")
 
             if args.once:
                 break

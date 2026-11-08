@@ -4,6 +4,7 @@ We pose as a UAP-AC-Pro (U7PG2). Data is static for now; later it comes from
 the OpenWrt router via ubus/iwinfo.
 """
 
+import re
 import time
 
 MODEL = "U7PG2"
@@ -13,15 +14,22 @@ VERSION = "6.6.55.15189"
 _BOOT = time.time()
 
 
+def newer_version(candidate, current):
+    """Whether firmware version candidate (6.6.77.15402) is newer than current."""
+    def parts(v):
+        return tuple(int(n) for n in re.findall(r"\d+", v or ""))
+    return parts(candidate) > parts(current)
+
+
 def inform_payload(mac, ip, hostname, inform_url, cfgversion=None, netmask="255.255.255.0",
-                   report=None):
+                   report=None, version=VERSION):
     """report: state fields from unifi_report (vap_table, sys_stats, ...); they win."""
-    payload = _base_payload(mac, ip, hostname, inform_url, cfgversion, netmask)
+    payload = _base_payload(mac, ip, hostname, inform_url, cfgversion, netmask, version)
     payload.update(report or {})
     return payload
 
 
-def _base_payload(mac, ip, hostname, inform_url, cfgversion, netmask):
+def _base_payload(mac, ip, hostname, inform_url, cfgversion, netmask, version):
     uptime = int(time.time() - _BOOT)
     return {
         "mac": mac,
@@ -29,7 +37,7 @@ def _base_payload(mac, ip, hostname, inform_url, cfgversion, netmask):
         "model": MODEL,
         "model_display": MODEL_DISPLAY,
         "board_rev": 21,
-        "version": VERSION,
+        "version": version,
         "required_version": "3.4.1",
         "bootrom_version": "unifi-v1.6.7.249-gb74e0282",
         "hostname": hostname,

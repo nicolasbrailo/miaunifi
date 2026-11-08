@@ -28,6 +28,19 @@ class TestPacket(unittest.TestCase):
         with self.assertRaises(packet.PacketError):
             packet.decode(raw)
 
+    def test_wrong_key(self):
+        for gcm in (False, True):
+            raw = packet.encode(MAC, b'{"a": 1}', key=b"k" * 16, gcm=gcm)
+            with self.assertRaises(packet.PacketError):
+                packet.decode(raw)
+
+    def test_bad_zlib(self):
+        raw = bytearray(packet.encode(MAC, b"{}"))
+        # Clear FLAG_ENCRYPTED (flags are at offset 14): the ciphertext goes straight to zlib
+        raw[14:16] = packet.FLAG_ZLIB.to_bytes(2, "big")
+        with self.assertRaises(packet.PacketError):
+            packet.decode(bytes(raw))
+
 
 if __name__ == "__main__":
     unittest.main()

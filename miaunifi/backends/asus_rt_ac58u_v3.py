@@ -172,13 +172,17 @@ class AsusRtAc58uV3(MiaunifiCommand):
     # --- WLANs -------------------------------------------------------------
 
     def add_wlan(self, wlan):
-        used = set(self.slots.values())
-        free = [s for s in range(SLOTS) if s not in used]
-        if not free:
-            log.warning("asus: no free network slot for %r (max %d per band), ignoring", wlan.ssid, SLOTS)
-            return
-        self.slots[wlan.id] = slot = free[0]
-        self._save()
+        # Already placed (a resync, or a retry after a failed apply): keep its
+        # slot, or WLANs would trade places with each other
+        slot = self.slots.get(wlan.id)
+        if slot is None:
+            used = set(self.slots.values())
+            free = [s for s in range(SLOTS) if s not in used]
+            if not free:
+                log.warning("asus: no free network slot for %r (max %d per band), ignoring", wlan.ssid, SLOTS)
+                return
+            self.slots[wlan.id] = slot = free[0]
+            self._save()
         for band in UNITS:
             if band in wlan.bands:
                 self._write_wlan(wlan, band, slot)
