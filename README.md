@@ -37,7 +37,8 @@ After that the helper exits and the macvlan is removed.
 
 ```sh
 sudo helper/install.sh      # once: installs the helper + a sudoers rule
-python3 -m miaunifi --inform-url http://<controller>:8080/inform --backend local
+cp config.example.json config.json   # then set inform_url and backend
+python3 -m miaunifi         # -c <path> for another config file
 ```
 
 If the controller runs on the same host, sshd must not listen on `0.0.0.0:22`

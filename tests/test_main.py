@@ -20,7 +20,7 @@ class TestVersion(unittest.TestCase):
 class TestUpgrade(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
-        self.args = SimpleNamespace(state=os.path.join(self.dir.name, "state.json"))
+        self.cfg = SimpleNamespace(state=os.path.join(self.dir.name, "state.json"))
         self.state = {}
 
     def tearDown(self):
@@ -28,14 +28,14 @@ class TestUpgrade(unittest.TestCase):
 
     def test_claims_newer_version(self):
         self.assertEqual(reported_version(self.state), device.VERSION)
-        handle_upgrade({"_type": "upgrade", "version": "99.0.1"}, self.state, self.args)
+        handle_upgrade({"_type": "upgrade", "version": "99.0.1"}, self.state, self.cfg)
         self.assertEqual(reported_version(self.state), "99.0.1")
-        with open(self.args.state) as f:
+        with open(self.cfg.state) as f:
             self.assertEqual(json.load(f)["version"], "99.0.1")
 
     def test_ignores_older_version(self):
-        handle_upgrade({"_type": "upgrade", "version": "99.0.1"}, self.state, self.args)
-        handle_upgrade({"_type": "upgrade", "version": "98.0"}, self.state, self.args)
+        handle_upgrade({"_type": "upgrade", "version": "99.0.1"}, self.state, self.cfg)
+        handle_upgrade({"_type": "upgrade", "version": "98.0"}, self.state, self.cfg)
         self.assertEqual(reported_version(self.state), "99.0.1")
 
     def test_code_version_wins_over_stale_state(self):
