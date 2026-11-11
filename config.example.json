@@ -1,0 +1,14 @@
+{
+  "inform_url": "http://10.0.0.10:8080/inform",
+  "backend": "local",
+  "hostname": "Miaunifi device",
+  "interval": 10,
+  "adopt_helper": "sudo -n /usr/local/bin/miaunifi-adopt",
+  "state": "miaunifi-state.json",
+  "system_cfg": "system_cfg.txt",
+  "applied_state": "miaunifi-applied.state.json",
+  "backends": {
+    "local": {"fake_clients": 0},
+    "asus_rt_ac58u_v3": {"host": "admin@10.0.0.1", "state_path": "miaunifi-asus.state.json"}
+  }
+}
