@@ -9,6 +9,6 @@
   "applied_state": "miaunifi-applied.state.json",
   "backends": {
     "local": {"fake_clients": 0},
-    "asus_rt_ac58u_v3": {"host": "admin@10.0.0.1", "state_path": "miaunifi-asus.state.json"}
+    "asus_rt_ac58u_v3": {"host": "admin@10.0.0.1", "port": 22, "state_path": "miaunifi-asus.state.json", "dry_run": false}
   }
 }

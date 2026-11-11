@@ -60,7 +60,13 @@ class UnifiCommandHandler:
         self.backend = backend
         self.state_path = state_path
         self.applied = self._load()
-        if self.applied["config"] is not None:
+        # The last config only went through a dry run: the device never got it
+        self.resync_needed = (self.applied["config"] is not None and self.applied["dry_run"]
+                              and not backend.dry_run)
+        if self.resync_needed:
+            log.info("last config was a dry run; it will be applied for real")
+            self.forget()
+        elif self.applied["config"] is not None:
             backend.restore(self.applied["config"])
 
     # --- persistence: what we last applied (holds passphrases) -----------
@@ -70,7 +76,7 @@ class UnifiCommandHandler:
             with open(self.state_path) as f:
                 data = json.load(f)
         except FileNotFoundError:
-            return {"config": None, "led": None}
+            return {"config": None, "led": None, "dry_run": False}
         cfg = data.get("config")
         if cfg is not None:
             cfg = model.DeviceConfig(
@@ -78,11 +84,11 @@ class UnifiCommandHandler:
                 radios=[model.Radio(**r) for r in cfg["radios"]],
                 wlans=[model.Wlan(**w) for w in cfg["wlans"]],
             )
-        return {"config": cfg, "led": data.get("led")}
+        return {"config": cfg, "led": data.get("led"), "dry_run": data.get("dry_run", False)}
 
     def _save(self):
         cfg = self.applied["config"]
-        data = {"led": self.applied["led"], "config": None}
+        data = {"led": self.applied["led"], "config": None, "dry_run": self.backend.dry_run}
         if cfg is not None:
             data["config"] = {"country": cfg.country,
                               "radios": [dataclasses.asdict(r) for r in cfg.radios],
@@ -95,7 +101,7 @@ class UnifiCommandHandler:
 
     def forget(self):
         """Treat the next config as brand new: every setting gets a command."""
-        self.applied = {"config": None, "led": None}
+        self.applied = {"config": None, "led": None, "dry_run": False}
         self._save()
 
     # --- setparam ---------------------------------------------------------

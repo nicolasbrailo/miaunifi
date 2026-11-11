@@ -43,3 +43,24 @@ python3 -m miaunifi         # -c <path> for another config file
 
 If the controller runs on the same host, sshd must not listen on `0.0.0.0:22`
 (set `ListenAddress`), or the fake SSH server can't bind.
+
+## Asus backend setup
+
+The service drives the router over SSH with a key, as the user it runs as:
+
+1. In the router's web UI, *Administration → System*: enable SSH (LAN only)
+   and paste that user's public key (`~/.ssh/id_rsa.pub`) into *Authorized
+   Keys*. Login is the router's admin user, not `root`.
+2. Check it works without a password, and accept the host key:
+   `ssh -p <port> <admin>@<router> true`
+3. In `config.json`, set `"backend": "asus_rt_ac58u_v3"` and its `host`
+   (`<admin>@<router>`) and `port` under `backends`.
+
+Set `"dry_run": true` to read the router's state but only log the changes
+miaunifi would make; after switching it off, the next restart applies the
+controller's config for real. The first WLAN the controller sends replaces
+the router's main network (SSID and password).
+
+The Asus router in the controller, with its Wi-Fi clients:
+
+![Controller topology showing the Asus router as an AP with its clients](screenshot.png)

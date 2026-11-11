@@ -142,8 +142,6 @@ def main():
     if cfg.mac:
         state["mac"] = cfg.mac.lower()
     state.setdefault("mac", random_mac())
-    if opts.resync:
-        state.pop("cfgversion", None)
     save_state(cfg.state, state)
 
     mac = state["mac"]
@@ -159,7 +157,10 @@ def main():
         ap.error(f"{opts.config}: {e}")
     handler = UnifiCommandHandler(backend, cfg.applied_state)
     reporter = Reporter(handler.backend)
-    if opts.resync:
+    if opts.resync or handler.resync_needed:
+        # Report no config version, so the controller sends the whole config again
+        state.pop("cfgversion", None)
+        save_state(cfg.state, state)
         handler.forget()
     log.info("backend: %s", cfg.backend)
 

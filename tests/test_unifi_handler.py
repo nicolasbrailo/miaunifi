@@ -24,8 +24,14 @@ class TestHandler(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.path = os.path.join(self.dir.name, "applied.state.json")
-        self.backend = mock.create_autospec(MiaunifiCommand, instance=True)
+        self.backend = self.make_backend()
         self.handler = UnifiCommandHandler(self.backend, self.path)
+
+    @staticmethod
+    def make_backend(dry_run=False):
+        backend = mock.create_autospec(MiaunifiCommand, instance=True)
+        backend.dry_run = dry_run
+        return backend
 
     def tearDown(self):
         self.dir.cleanup()
@@ -85,10 +91,24 @@ class TestHandler(unittest.TestCase):
 
     def test_restart_restores_backend_view(self):
         self.handler.apply_system_cfg(fixture_text())
-        backend = mock.create_autospec(MiaunifiCommand, instance=True)
+        backend = self.make_backend()
         UnifiCommandHandler(backend, self.path)
         [cfg] = backend.restore.call_args.args
         self.assertEqual([w.ssid for w in cfg.wlans], ["SSID_1"])
+
+    def test_dry_run_config_is_applied_for_real_later(self):
+        dry = self.make_backend(dry_run=True)
+        UnifiCommandHandler(dry, self.path).apply_system_cfg(fixture_text())
+        # Still dry-running: nothing to redo
+        self.assertFalse(UnifiCommandHandler(self.make_backend(dry_run=True), self.path).resync_needed)
+        backend = self.make_backend()
+        handler = UnifiCommandHandler(backend, self.path)
+        self.assertTrue(handler.resync_needed)
+        backend.restore.assert_not_called()
+        handler.apply_system_cfg(fixture_text())
+        self.assertIn("add_wlan", [c[0] for c in backend.method_calls])
+        # Applied for real now: the next start is a normal one
+        self.assertFalse(UnifiCommandHandler(self.make_backend(), self.path).resync_needed)
 
     def test_removed_wlan(self):
         self.handler.apply_system_cfg(fixture_text())

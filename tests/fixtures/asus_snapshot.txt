@@ -1,0 +1,70 @@
+@@iface ath0
+ath0      IEEE 802.11ng  ESSID:"Batiseñal"  
+          Mode:Master  Frequency:2.462 GHz  Access Point: 02:10:C9:32:0F:D0   
+          Bit Rate:288.8 Mb/s   Tx-Power:17 dBm   
+          RTS thr:off   Fragment thr:off
+          Power Management:off
+          Link Quality=0/94  Signal level=-95 dBm  Noise level=-95 dBm
+          Rx invalid nwid:4605649  Rx invalid crypt:541  Rx invalid frag:0
+          Tx excessive retries:0  Invalid misc:0   Missed beacon:0
+          Current Frequency:2.462 GHz (Channel 11)
+ath0      get_mode:11NGHT20
+@@stats 13141730651 96070066685 44581790 91212237
+@@sta
+ADDR               AID CHAN TXRATE RXRATE RSSI MINRSSI MAXRSSI IDLE  TXSEQ  RXSEQ  CAPS XCAPS        ACAPS     ERP    STATE MAXRATE(DOT11) HTCAPS VHTCAPS ASSOCTIME    IEs   MODE                   PSMODE RXNSS TXNSS
+02:3a:dd:7f:dd:9d    5   11  72M     71M   49       9      57   15  20239   11888  EPSs               0          f              0              AQ             10g 538:02:30  RSN WME IEEE80211_MODE_11NG_HT20   0 1 1 Minimum Tx Power		: 0
+ Maximum Tx Power		: 21
+ HT Capability			: Yes
+@@hostapd
+02:3a:dd:7f:dd:9d
+flags=[AUTH][ASSOC][AUTHORIZED][WMM][HT]
+aid=5
+rx_packets=3496400
+tx_packets=9021337
+rx_bytes=415475332
+tx_bytes=10585855028
+inactive_msec=15020
+signal=0
+connected_time=1937201
+@@iface ath1
+ath1      IEEE 802.11ac  ESSID:"Batiseñal"  
+          Mode:Master  Frequency:5.5 GHz  Access Point: 02:10:C9:32:0F:D4   
+          Bit Rate:866.7 Mb/s   Tx-Power:25 dBm   
+          Link Quality=94/94  Signal level=-97 dBm  Noise level=-95 dBm
+          Current Frequency=5.5 GHz (Channel 100)
+ath1      get_mode:11ACVHT80
+@@stats 46921318000 746731122000 41230111 512300222
+@@sta
+ADDR               AID CHAN TXRATE RXRATE RSSI MINRSSI MAXRSSI IDLE  TXSEQ  RXSEQ  CAPS XCAPS        ACAPS     ERP    STATE MAXRATE(DOT11) HTCAPS VHTCAPS ASSOCTIME    IEs   MODE                   PSMODE RXNSS TXNSS
+02:0e:2b:4a:36:9d    8  100 195M    866M   40      21      55    3      0   65535    EP  EWBO         0          b              0            AWPS            gGTR 998:27:26  RSN WME IEEE80211_MODE_11AC_VHT80   1 2 2 Minimum Tx Power		: 0
+ Maximum Tx Power		: 23
+ HT Capability			: Yes
+@@hostapd
+@@nvram
+wl0_radio=1
+wl1_radio=1
+wl0_ifname=ath0
+wl0_ssid=Batiseñal
+wl0_bss_enabled=1
+wl0_lanaccess=off
+wl0.1_ifname=
+wl0.1_ssid=ASUS_D0_2G_Guest
+wl0.1_bss_enabled=0
+wl0.1_lanaccess=off
+wl1_ifname=ath1
+wl1_ssid=Batiseñal
+wl1_bss_enabled=1
+wl1_lanaccess=off
+wl1.1_ifname=
+wl1.1_ssid=ASUS_D0_5G_Guest
+wl1.1_bss_enabled=0
+wl1.1_lanaccess=off
+@@uptime 5295479.18 4368241.43
+@@loadavg 0.82 0.62 0.49 1/99 21525
+@@meminfo
+MemTotal:         124892 kB
+MemAvailable:      46572 kB
+@@arp
+IP address       HW type     Flags       HW address            Mask     Device
+10.0.0.88        0x1         0x2         02:3a:dd:7f:dd:9d     *        br0
+10.0.0.103       0x1         0x0         00:00:00:00:00:00     *        br0

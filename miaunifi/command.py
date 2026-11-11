@@ -16,6 +16,10 @@ from abc import ABC, abstractmethod
 
 
 class MiaunifiCommand(ABC):
+    # True: commands are only logged, the device isn't touched. A config
+    # applied this way is pushed for real once the backend stops dry-running.
+    dry_run = False
+
     # --- device ----------------------------------------------------------
 
     @abstractmethod
